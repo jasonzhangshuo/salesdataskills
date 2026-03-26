@@ -6,36 +6,32 @@
 
 ## 快速开始
 
-### 1. 创建虚拟环境并安装依赖
+### 方式 A：Cursor 自然语言安装（推荐给 Cursor 用户）
+
+用 Cursor 打开项目目录，直接对 AI 说：
+
+> 帮我安装 salesdataskills，引导我配置凭据
+
+Cursor AI 会自动读取 `skills/setup-guide/SKILL.md`，逐步引导你：
+建虚拟环境 → 填写凭据到 `.env` → preflight 验证 → 初始化数据库。
+
+### 方式 B：终端交互式安装
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-# 可选：Metabase Playwright 兜底
-playwright install chromium
+python scripts/install.py      # 交互向导，引导填写凭据
 ```
 
-### 2. 配置凭据
+### 方式 C：手动配置
 
-**方式 A：交互式安装向导（推荐）**
-```bash
-python scripts/install.py
-```
-
-**方式 B：手动编辑**
 ```bash
 cp .env.example .env
-# 用编辑器填写 INTERNAL_API_KEY、CRM_BASE_URL、METABASE_HOST
+# 编辑 .env，填写 INTERNAL_API_KEY、CRM_BASE_URL、METABASE_HOST
+python scripts/preflight.py    # 验证配置
+python runtime/init_db.py      # 初始化数据库
 ```
-
-### 3. 验证安装
-
-```bash
-python scripts/preflight.py
-```
-
-所有项 ✅ 即可正常使用。
 
 ---
 
