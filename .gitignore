@@ -1,0 +1,29 @@
+# Cursor IDE 个人配置
+.cursor/
+
+# 凭据（绝对不提交）
+.env
+config.local.json
+
+# 本地数据库
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# 临时输出
+*.json.tmp
+/output/

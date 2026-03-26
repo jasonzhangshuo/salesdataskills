@@ -1,0 +1,12 @@
+# salesdataskills 依赖
+# 安装：pip install -r requirements.txt
+
+# HTTP 请求（Metabase connector）
+requests>=2.31.0
+
+# 从 Chrome 提取 session cookie（Metabase 鉴权）
+browser-cookie3>=0.19.1
+
+# Playwright（Metabase 兜底方案，可选）
+# 安装后还需执行：playwright install chromium
+playwright>=1.40.0
