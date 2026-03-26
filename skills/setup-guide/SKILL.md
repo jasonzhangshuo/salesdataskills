@@ -36,21 +36,24 @@ pip install -r requirements.txt
 ### Step 3：收集凭据（AI 逐项询问用户）
 
 对用户说：
-> 现在需要你提供 3 项凭据，我来帮你写入 .env 文件：
+> 只需要 2 项配置，都是地址（不需要手动拿 token）：
 >
-> 1. **CRM API Token**（登录 CRM 系统后从"个人设置"或管理员处获取的 JWT token）
-> 2. **CRM 接口地址**（格式：`https://crm.your-company.com/crmapi`）
-> 3. **Metabase 地址**（格式：`https://metabase.your-company.com`，不加路径）
+> 1. **CRM 接口地址**（格式：`https://crm.your-company.com/crmapi`）
+> 2. **Metabase 地址**（格式：`https://metabase.your-company.com`，不加路径）
 >
-> Metabase 不需要 token，只要你在本机 Chrome 登录过 Metabase 就行。
+> **CRM 和 Metabase 的 token 都会自动从 Chrome 读取**——只要你在本机 Chrome 中保持登录状态即可，不需要手动复制粘贴 token。
 
 用户提供后，**把以下内容写入项目根目录的 `.env` 文件**（用 Write 工具，不要用 echo）：
 
 ```
-INTERNAL_API_KEY=<用户提供的 token>
 CRM_BASE_URL=<用户提供的 CRM 地址>
 METABASE_HOST=<用户提供的 Metabase 地址>
 ```
+
+然后提醒用户：
+> 接下来会检查 Chrome 登录状态。请确认：
+> - Chrome 中已登录 CRM（打开 CRM 地址，确认已登录）
+> - Chrome 中已登录 Metabase（打开 Metabase 地址，确认已登录）
 
 ### Step 4：运行 preflight 验证
 

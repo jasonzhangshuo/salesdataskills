@@ -49,20 +49,22 @@ class _Check:
 def check_crm() -> list[_Check]:
     results: list[_Check] = []
 
-    # API key
+    # base URL（必填）
+    base_url = os.environ.get("CRM_BASE_URL", "").strip()
+    if not base_url:
+        results.append(_Check("CRM_BASE_URL", False, "未设置，请在 .env 中配置 CRM_BASE_URL"))
+        return results
+    results.append(_Check("CRM_BASE_URL", True, base_url))
+
+    # token：env var 或 Chrome cookie，有一个即可
     key = (
         os.environ.get("INTERNAL_API_KEY")
         or os.environ.get("WORKWX_API_KEY")
         or os.environ.get("CRM_TOKEN")
         or ""
     )
-    if not key:
-        results.append(_Check(
-            "CRM API key",
-            False,
-            "未设置 INTERNAL_API_KEY / WORKWX_API_KEY / CRM_TOKEN",
-        ))
-    else:
+
+    if key:
         import base64, json as _json, time
         try:
             parts = key.split(".")
@@ -71,22 +73,41 @@ def check_crm() -> list[_Check]:
             if exp > 0:
                 days_left = (exp - int(time.time())) // 86400
                 if days_left < 0:
-                    results.append(_Check("CRM token 有效期", False, f"已过期（{days_left} 天）"))
+                    results.append(_Check("CRM token (.env)", False, f"已过期（{days_left} 天），请重新登录"))
                 elif days_left < 7:
-                    results.append(_Check("CRM token 有效期", True, f"⚠️  还剩 {days_left} 天，请尽快刷新"))
+                    results.append(_Check("CRM token (.env)", True, f"⚠️  还剩 {days_left} 天，请尽快刷新"))
                 else:
-                    results.append(_Check("CRM token 有效期", True, f"还剩 {days_left} 天"))
+                    results.append(_Check("CRM token (.env)", True, f"已设置，还剩 {days_left} 天"))
             else:
-                results.append(_Check("CRM API key", True, "已设置（非 JWT 格式，跳过过期检查）"))
+                results.append(_Check("CRM token (.env)", True, "已设置（非 JWT，跳过过期检查）"))
         except Exception:
-            results.append(_Check("CRM API key", True, "已设置"))
-
-    # base URL
-    base_url = os.environ.get("CRM_BASE_URL", "").strip()
-    if not base_url:
-        results.append(_Check("CRM_BASE_URL", False, "未设置，请在 .env 中配置 CRM_BASE_URL"))
+            results.append(_Check("CRM token (.env)", True, "已设置"))
     else:
-        results.append(_Check("CRM_BASE_URL", True, base_url))
+        # 尝试从 Chrome cookie 读取
+        try:
+            import browser_cookie3
+            from urllib.parse import urlparse
+            host = urlparse(base_url).hostname or ""
+            cookie_names = ["token", "Authorization", "userToken", "auth_token", "jwt", "accessToken"]
+            configured = os.environ.get("CRM_COOKIE_NAME", "")
+            if configured:
+                cookie_names.insert(0, configured)
+
+            cj = browser_cookie3.chrome(domain_name=host)
+            cookies = {c.name: c.value for c in cj}
+            found = next((n for n in cookie_names if cookies.get(n)), "")
+            if found:
+                results.append(_Check("CRM token (Chrome)", True, f"从 Chrome cookie '{found}' 读取到"))
+            else:
+                results.append(_Check(
+                    "CRM token",
+                    False,
+                    f"Chrome 中未找到 {host} 的 session cookie，请先在 Chrome 登录 CRM",
+                ))
+        except ImportError:
+            results.append(_Check("CRM token", False, "browser_cookie3 未安装且未设置 INTERNAL_API_KEY"))
+        except Exception as exc:
+            results.append(_Check("CRM token (Chrome)", False, f"读取失败: {exc}"))
 
     return results
 

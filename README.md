@@ -94,12 +94,13 @@ salesdataskills/
 
 | 变量 | 说明 | 必填 |
 |---|---|---|
-| `INTERNAL_API_KEY` | CRM API token（JWT）| ✅ 三选一 |
-| `WORKWX_API_KEY` | 同上，优先级次之 | ✅ 三选一 |
-| `CRM_TOKEN` | 同上，优先级最低 | ✅ 三选一 |
-| `CRM_BASE_URL` | CRM 接口 base URL | ✅ |
-| `METABASE_HOST` | Metabase 实例地址 | ✅ |
-| `DATA_REPO_DB_PATH` | 本地 SQLite 路径 | 可选（有默认值） |
+| `CRM_BASE_URL` | CRM 接口 base URL，如 `https://crm.xxx.com/crmapi` | ✅ |
+| `METABASE_HOST` | Metabase 实例地址，如 `https://metabase.xxx.com` | ✅ |
+| `DATA_REPO_DB_PATH` | 本地 SQLite 路径 | 可选（默认 `~/Documents/salesdataskills/local.db`） |
+| `INTERNAL_API_KEY` | CRM token（手动指定时优先于 Chrome cookie）| 可选 |
+| `CRM_COOKIE_NAME` | CRM session 的 cookie 名称（自动读取失败时才需要填）| 可选 |
+
+**Token 获取方式**：CRM 和 Metabase 的 token **均自动从 Chrome 读取**，只需在 Chrome 保持登录状态即可，不需要手动复制 token。
 
 **安全说明**：`.env` 已加入 `.gitignore`，不会被提交。
 

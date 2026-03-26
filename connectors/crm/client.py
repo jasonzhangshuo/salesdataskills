@@ -3,7 +3,9 @@
 CRM 通用 API 客户端。
 
 所有 CRM 接口（system-bigdata-crm-web 服务）共用此模块：
-- 统一鉴权：INTERNAL_API_KEY / WORKWX_API_KEY / CRM_TOKEN（优先级依次降低）
+- 鉴权优先级：
+    1. Chrome cookie 自动读取（保持 Chrome 登录 CRM 即可，无需手动配置 token）
+    2. 环境变量 INTERNAL_API_KEY / WORKWX_API_KEY / CRM_TOKEN（可选，手动指定时优先）
 - 统一 base URL：由 CRM_BASE_URL 环境变量配置
 - 统一 payload 包装：{"data": ...}
 - 内置时间窗口递归分页（应对 page=1, pageSize=20 限制）
@@ -74,25 +76,85 @@ def _decode_jwt_exp(token: str) -> int:
         return 0
 
 
+# ── Chrome Cookie 读取 ────────────────────────────────────────────────────────
+
+# CRM 登录后在 Chrome 中可能保存 token 的 cookie 名称（按优先级尝试）
+_CRM_COOKIE_CANDIDATES = ["token", "Authorization", "userToken", "auth_token", "jwt", "accessToken"]
+
+
+def get_crm_token_from_chrome(host: str) -> str:
+    """
+    从本地 Chrome 提取 CRM session token。
+    host: CRM 域名，如 crm.hongsong.info
+
+    返回 token 字符串，未找到则返回空字符串。
+    """
+    try:
+        import browser_cookie3
+
+        cj = browser_cookie3.chrome(domain_name=host)
+        cookies = {c.name: c.value for c in cj}
+
+        # 优先使用配置的 cookie 名
+        configured = os.environ.get("CRM_COOKIE_NAME", "")
+        if configured and cookies.get(configured):
+            token = cookies[configured]
+            masked = token[:8] + "..." if len(token) > 8 else token
+            print(f"  [Chrome cookie] {configured}: {masked}")
+            return token
+
+        # 依次尝试候选名
+        for name in _CRM_COOKIE_CANDIDATES:
+            val = cookies.get(name, "")
+            if val:
+                masked = val[:8] + "..." if len(val) > 8 else val
+                print(f"  [Chrome cookie] {name}: {masked}")
+                return val
+
+        print(f"  ⚠️  未在 Chrome 找到 {host} 的 CRM session cookie", file=sys.stderr)
+        return ""
+    except ImportError:
+        print("❌ 缺少 browser_cookie3，请运行：pip install browser-cookie3", file=sys.stderr)
+        return ""
+    except Exception as exc:
+        print(f"  ⚠️  读取 Chrome cookie 失败: {exc}", file=sys.stderr)
+        return ""
+
+
 # ── 凭据读取 ──────────────────────────────────────────────────────────────────
 
 def get_api_key() -> str:
     """
-    按优先级读取 CRM API key：
-      INTERNAL_API_KEY → WORKWX_API_KEY → CRM_TOKEN
-    任一存在即使用；全部缺失则以非零状态退出。
+    按优先级获取 CRM 鉴权 token：
+      1. 环境变量 INTERNAL_API_KEY / WORKWX_API_KEY / CRM_TOKEN（手动配置优先）
+      2. Chrome cookie 自动读取（只需在 Chrome 保持 CRM 登录状态）
+
+    全部来源均无有效 token 则退出。
     """
     load_dotenv()
+
+    # 优先：env var
     key = (
         os.environ.get("INTERNAL_API_KEY")
         or os.environ.get("WORKWX_API_KEY")
         or os.environ.get("CRM_TOKEN")
         or ""
     )
+
+    # 回退：Chrome cookie
+    if not key:
+        base_url = os.environ.get("CRM_BASE_URL", "").strip()
+        if base_url:
+            from urllib.parse import urlparse
+            host = urlparse(base_url).hostname or ""
+            if host:
+                key = get_crm_token_from_chrome(host)
+
     if not key:
         print(
-            "❌ CRM API key 未设置。请在 .env 中配置以下任一变量：\n"
-            "   INTERNAL_API_KEY / WORKWX_API_KEY / CRM_TOKEN",
+            "❌ 无法获取 CRM token。请满足以下任一条件：\n"
+            "   1. 在本机 Chrome 中保持 CRM 登录状态（推荐）\n"
+            "   2. 在 .env 中配置 INTERNAL_API_KEY / WORKWX_API_KEY / CRM_TOKEN",
             file=sys.stderr,
         )
         raise SystemExit(1)
@@ -103,13 +165,14 @@ def get_api_key() -> str:
         days_left = (exp - now) // 86400
         if now >= exp:
             print(
-                f"❌ CRM API token 已过期（{time.strftime('%Y-%m-%d', time.localtime(exp))}）",
+                f"❌ CRM token 已过期（{time.strftime('%Y-%m-%d', time.localtime(exp))}）"
+                " 请在 Chrome 重新登录 CRM。",
                 file=sys.stderr,
             )
             raise SystemExit(1)
         if days_left < 7:
             print(
-                f"⚠️  CRM API token 还剩 {days_left} 天过期，请尽快刷新",
+                f"⚠️  CRM token 还剩 {days_left} 天过期，请尽快重新登录 CRM",
                 file=sys.stderr,
             )
 
