@@ -1,73 +1,112 @@
-# CRM 数据查询
+# 大数据接口查询（system-bigdata-crm-web）
 
 ## 描述
 
-查询 CRM 系统数据（销售线索、企微聊天、外部跟进等）。
-凭据从用户本地 `.env` 读取，结果写入本地 SQLite 数据库。
+查询红松大数据平台的 8 个标准接口，覆盖 PGC 内容、企微聊天、销售 Leads、直播间、用户行为等数据。
 
-## 前置要求
+- **鉴权**：在本机 Chrome 登录 CRM（`crm.hongsong.info`）即可，cookie 自动读取，无需手动配置 token
+- **Base URL**：`https://crm.hongsong.info/crmapi`
+- **服务前缀**：`/api/system-bigdata-crm-web`
 
-用户必须在项目 `.env` 中配置：
-- `INTERNAL_API_KEY`（或 `WORKWX_API_KEY` / `CRM_TOKEN`）
-- `CRM_BASE_URL`
+> 注意：这是「大数据查询接口」，不是 CRM 业务系统（salesWorkbench）本身。
+> 两者共用同一个域名登录，但功能不同。
+
+---
+
+## 8 个接口数据字典
+
+| # | 自然语言关键词 | 接口路径 | 说明 |
+|---|---|---|---|
+| 1 | PGC内容、内容资源、图文视频数据、资源汇总 | `pgc/resourceSummary/page` | PGC 内容资源汇总（阅读/点赞/收藏/广告/线索等） |
+| 2 | PGC用户、关注官方号、老师关注数 | `pgc/userSummary/page` | PGC 用户维度汇总（关注官方号核心指标） |
+| 3 | 外部联系人、加微、企微好友、externalFollow | `externalFollow/page` | 企微外部联系人关注/删除记录 |
+| 4 | 聊天记录、聊天会话、企微聊天、chatSession | `chatSession/page` | 企微聊天会话列表 |
+| 5 | 直播、直播间、liveRoom | `liveRoomOperation/page` | 直播间运营数据 |
+| 6 | 销售线索、Leads、意向用户 | `salesLeads/page` | 销售 Leads 列表 |
+| 7 | 下载app、注册用户、用户信息、userApp | `userApp/page` | 下载 App / 用户基础信息（含活跃度、AI订阅、扩科意图等） |
+| 8 | PGC互动明细、点赞评论、互动行为 | `pgc/engageDetail/page` | PGC 内容互动明细（按用户×资源×日期） |
+
+---
 
 ## 使用方式
 
 ### 连通性测试
+
 ```bash
 cd {baseDir}
+source .venv/bin/activate
 python -m connectors.crm.client
 ```
 
-### 测试指定接口
-```bash
-python -m connectors.crm.client --path salesLeads/page --path chatSession/page
-```
+### 在代码 / Cursor 中调用
 
-### 在代码中调用
 ```python
 from connectors.crm.client import crm_post, fetch_with_time_window, fetch_with_index_paging
 
-# 简单查询（单次，最多 20 条）
-rows = crm_post("salesLeads/page", {
-    "startTimestamp": 1742745600000,
-    "endTimestamp": 1742832000000,
-    "page": 1,
-    "pageSize": 20,
-})
-
-# 时间窗口递归分页（自动处理 20 条限制）
+# ── 接口 6：销售 Leads（时间窗口分页，毫秒时间戳）──
 rows = fetch_with_time_window(
     "salesLeads/page",
-    start_ts=1742745600000,
-    end_ts=1742832000000,
+    start_ts=1742745600000,   # 2026-03-24 00:00:00
+    end_ts=1742832000000,     # 2026-03-25 00:00:00
     dedup_key="leadsId",
 )
 
-# index 翻页（pgc 类接口）
+# ── 接口 4：聊天会话（时间窗口分页）──
+rows = fetch_with_time_window(
+    "chatSession/page",
+    start_ts=1742745600000,
+    end_ts=1742832000000,
+    extra_params={"corpId": "your_corp_id"},
+)
+
+# ── 接口 3：外部联系人关注（字符串时间）──
+from connectors.crm.client import fetch_with_time_window_str
+rows = fetch_with_time_window_str(
+    "externalFollow/page",
+    start_time="2026-03-24 00:00:00",
+    end_time="2026-03-24 23:59:59",
+)
+
+# ── 接口 1：PGC 内容汇总（index 翻页）──
 rows = fetch_with_index_paging(
     "pgc/resourceSummary/page",
-    {"statDateStart": "2026-03-25", "statDateEnd": "2026-03-25"},
+    {"statDateStart": "2026-03-24", "statDateEnd": "2026-03-24"},
     page_size=200,
+)
+
+# ── 接口 2：PGC 用户汇总（index 翻页）──
+rows = fetch_with_index_paging(
+    "pgc/userSummary/page",
+    {"statDateStart": "2026-03-24", "statDateEnd": "2026-03-24"},
+    page_size=200,
+)
+
+# ── 接口 7：下载App用户（简单单次）──
+rows = crm_post("userApp/page", {"page": 1, "pageSize": 500})
+
+# ── 接口 8：PGC 互动明细（index 翻页）──
+rows = fetch_with_index_paging(
+    "pgc/engageDetail/page",
+    {"startDate": "2026-03-24", "endDate": "2026-03-24"},
+    page_size=500,
 )
 ```
 
-## 支持的 Endpoint
+---
 
-| 业务名称 | 接口路径 | 分页类型 |
+## 各接口分页类型说明
+
+| 分页类型 | 对应接口 | 用哪个函数 |
 |---|---|---|
-| 销售线索 | `salesLeads/page` | 时间窗口 |
-| 企微聊天 | `chatSession/page` | 时间窗口 |
-| 外部跟进 | `externalFollow/page` | 时间窗口（字符串） |
-| 用户应用 | `userApp/page` | index 翻页 |
-| 直播间操作 | `liveRoomOperation/page` | 时间窗口 |
-| PGC 资源汇总 | `pgc/resourceSummary/page` | index 翻页 |
-| PGC 用户汇总 | `pgc/userSummary/page` | index 翻页 |
-| PGC 互动详情 | `pgc/engageDetail/page` | index 翻页 |
+| 时间窗口递归（毫秒时间戳） | salesLeads、chatSession、liveRoomOperation | `fetch_with_time_window` |
+| 时间窗口递归（字符串时间） | externalFollow | `fetch_with_time_window_str` |
+| index 翻页 | pgc/resourceSummary、pgc/userSummary、pgc/engageDetail | `fetch_with_index_paging` |
+| 单次（无分页限制） | userApp | `crm_post` 直接调用 |
+
+---
 
 ## 错误排查
 
-- `❌ CRM API key 未设置` → 检查 `.env` 中是否有 `INTERNAL_API_KEY`
-- `❌ CRM_BASE_URL 未设置` → 检查 `.env` 中是否有 `CRM_BASE_URL`
-- `❌ API token 已过期` → 重新登录 CRM 获取新 token，更新 `.env`
-- `HTTP 401` → token 无效或已失效
+- `❌ 无法获取 CRM token` → 在 Chrome 打开 `https://crm.hongsong.info` 并确认已登录
+- `❌ CRM_BASE_URL 未设置` → `.env` 中添加 `CRM_BASE_URL=https://crm.hongsong.info/crmapi`
+- `HTTP 401 / 403` → Chrome 中的登录 session 已过期，重新登录后再试
